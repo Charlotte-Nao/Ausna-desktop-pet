@@ -121,6 +121,7 @@
             margin: 5px 0;
         }
         
+        /* 气泡样式 - 调整大小和位置请修改以下属性 */
         .speech-bubble {
             position: absolute;
             background: rgba(255, 255, 255, 0.95);
@@ -172,8 +173,10 @@
 </head>
 <body>
     <div id="container">
+        <!-- 亚丝娜画布 - 调整width和height可改变亚丝娜大小 -->
         <canvas id="glcanvas" width="500" height="1000"></canvas>
         
+        <!-- 气泡消息容器 - 样式在CSS中定义 -->
         <div id="speech-bubble" class="speech-bubble"></div>
         
         <div id="controls">
@@ -295,6 +298,7 @@
         
 
         
+        // 初始化桌面宠物 - 加载Live2D模型和高级功能
         function initializeDesktopPet() {
             console.log('初始化桌面宠物...');
             window.currentCostume = '02';
@@ -306,6 +310,7 @@
         }
         window.initializeDesktopPet = initializeDesktopPet;
 
+        // 设置事件监听器 - 处理拖拽、右键菜单、控制按钮等
         function setupEventListeners() {
             const container = document.getElementById('container');
             const canvas = document.getElementById('glcanvas');
@@ -387,6 +392,7 @@
         }
         window.setupEventListeners = setupEventListeners;
 
+        // 显示右键菜单 - 参数x,y为菜单显示坐标
         function showContextMenu(x, y) {
             const contextMenu = document.getElementById('context-menu');
             contextMenu.style.left = x + 'px';
@@ -394,11 +400,13 @@
             contextMenu.style.display = 'block';
         }
         
+        // 隐藏右键菜单
         function hideContextMenu() {
             const contextMenu = document.getElementById('context-menu');
             contextMenu.style.display = 'none';
         }
         
+        // 处理右键菜单选项 - 根据action执行相应操作
         function handleContextMenuAction(action) {
             switch(action) {
                 case 'fortune':
@@ -419,11 +427,13 @@
             }
         }
         
+        // 播放运势占卜音频
         function playFortune() {
             console.log('播放运势占卜');
             playRandomAudio('fortune');
         }
         
+        // 切换服装 - 循环切换01,02,03三个模型
         function changeCostume() {
             console.log('切换服装');
             const costumes = ['01', '02', '03'];
@@ -448,11 +458,14 @@
             }
         }
         
+        // 切换控制按钮显示/隐藏
         function toggleControls() {
             const controls = document.getElementById('controls');
             controls.style.display = controls.style.display === 'none' ? 'block' : 'none';
         }
         
+        // 显示气泡消息 - text: 显示文本, duration: 显示时长(毫秒)
+        // 气泡样式在CSS中定义，如需调整大小位置请修改 .speech-bubble 样式
         function showSpeechBubble(text, duration = 3000) {
             const bubble = document.getElementById('speech-bubble');
             bubble.textContent = text;
@@ -467,6 +480,7 @@
             }, duration);
         }
         
+        // 播放随机音频 - type: 音频类型('interaction'或'fortune')
         function playRandomAudio(type = 'interaction') {
             try {
                 // 停止之前播放的音频
@@ -524,6 +538,25 @@
             }
         }
         
+        // 根据动作文件名获取在空组中的索引
+        function getMotionIndex(motionName) {
+            // 空组动作列表，顺序与 model.json 中的 motions[""] 一致
+            const motionList = [
+                'I_FUN', 'I_FUN_S', 'I_FUN_W',
+                'I_SAD', 'I_SAD_S', 'I_SAD_W',
+                'I_SNEESE',
+                'I_SURPRISE', 'I_SURPRISE_S', 'I_SURPRISE_W',
+                'REPEAT_01', 'REPEAT_02', 'REPEAT_03',
+                'I_ANGRY', 'I_ANGRY_S', 'I_ANGRY_W'
+            ];
+            // 如果传入的是带 .mtn 后缀的文件名，去掉后缀
+            const cleanName = motionName.replace('.mtn', '');
+            const index = motionList.indexOf(cleanName);
+            console.log(`查找动作索引: ${motionName} -> ${cleanName}, 索引: ${index}`);
+            return index;
+        }
+        
+        // 与亚丝娜交互 - part: 身体部位('head','body','chest','foot')
         function interactWithAsuna(part = 'body') {
             console.log('与亚丝娜交互:', part);
             
@@ -540,17 +573,57 @@
             showSpeechBubble(randomText, 3000);
             playRandomAudio('interaction');
             
-            if (window.live2DHelper) {
-                try {
-                    const motions = ['I_FUN', 'I_SURPRISE', 'I_ANGRY'];
-                    const randomMotion = motions[Math.floor(Math.random() * motions.length)];
-                    window.live2DHelper.startMotion(randomMotion, "0");
-                } catch(e) {
-                    console.log('Live2D动作失败:', e);
-                }
-            }
+             if (window.live2DHelper) {
+                 try {
+                     console.log('Live2DHelper存在，开始触发动作');
+                     // 根据不同部位触发不同的动作
+                     let motionOptions = [];
+                     switch(part) {
+                         case 'head':
+                             // 头部: 有趣、惊讶等动作
+                             motionOptions = ['I_FUN', 'I_FUN_S', 'I_SURPRISE', 'I_SURPRISE_S'];
+                             break;
+                         case 'chest':
+                             // 胸部: 生气、惊讶等动作
+                             motionOptions = ['I_ANGRY', 'I_ANGRY_S', 'I_ANGRY_W', 'I_SURPRISE_W'];
+                             break;
+                         case 'body':
+                             // 身体: 有趣、悲伤等动作
+                             motionOptions = ['I_FUN', 'I_FUN_W', 'I_SAD', 'I_SAD_W'];
+                             break;
+                         case 'foot':
+                             // 脚部: 打喷嚏、悲伤等动作
+                             motionOptions = ['I_SNEESE', 'I_SAD', 'I_SAD_S', 'I_SURPRISE'];
+                             break;
+                         default:
+                             motionOptions = ['I_FUN', 'I_SURPRISE', 'I_ANGRY'];
+                     }
+                     
+                     // 随机选择一个动作
+                     const randomMotion = motionOptions[Math.floor(Math.random() * motionOptions.length)];
+                     console.log('触发动作:', randomMotion, '部位:', part);
+                     
+                     // 使用空组名和索引 (需要根据动作名找到索引)
+                     const motionGroup = "";
+                     const motionIndex = getMotionIndex(randomMotion);
+                     console.log('动作组:', motionGroup, '索引:', motionIndex);
+                     
+                     if (motionIndex !== -1) {
+                         window.live2DHelper.startMotion(motionGroup, motionIndex.toString());
+                         console.log('已调用startMotion with group and index');
+                     } else {
+                         // 如果索引未找到，使用随机索引 (0-15)
+                         const fallbackIndex = Math.floor(Math.random() * 16);
+                         console.log('动作索引未找到，使用随机索引:', fallbackIndex);
+                         window.live2DHelper.startMotion(motionGroup, fallbackIndex.toString());
+                     }
+                 } catch(e) {
+                     console.log('Live2D动作失败:', e);
+                 }
+             }
         }
         
+        // 设置亚丝娜交互 - 点击画布不同部位触发不同反应
         function setupAsunaInteraction() {
             const canvas = document.getElementById('glcanvas');
             
@@ -581,6 +654,7 @@
             console.log('亚丝娜交互已设置');
         }
         
+        // 初始化高级功能 - 延迟设置交互和显示欢迎气泡
         function initAdvancedFeatures() {
             setTimeout(() => {
                 setupAsunaInteraction();

@@ -1,3 +1,4 @@
+/* Live2D样式文件 - 控制画布位置和动画效果 */
 #glcanvas {
 	position: fixed;
 	bottom: 0px;

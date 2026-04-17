@@ -1,6 +1,10 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage } = require('electron');
 const path = require('path');
 
+// Electron主进程文件 - 控制应用窗口和系统托盘
+// 如需调整亚丝娜大小，请修改 createWindow 中的 width 和 height 参数
+// 如需调整窗口位置，请修改 x 和 y 参数
+
 app.commandLine.appendSwitch('high-dpi-support', '1');
 app.commandLine.appendSwitch('force-device-scale-factor', '1');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
@@ -20,6 +24,13 @@ console.log('Electron主进程启动...');
 let mainWindow = null;
 let tray = null;
 
+// 创建主窗口函数
+// 参数说明:
+// width: 窗口宽度 (调整亚丝娜大小需同时修改此处和index.html中canvas的width)
+// height: 窗口高度 (调整亚丝娜大小需同时修改此处和index.html中canvas的height)
+// x: 窗口初始X坐标
+// y: 窗口初始Y坐标
+// 其他参数: frame (无边框), transparent (透明), alwaysOnTop (置顶) 等
 function createWindow() {
   console.log('创建窗口...');
   mainWindow = new BrowserWindow({
@@ -75,6 +86,7 @@ function createWindow() {
   setupWindowDrag();
 }
 
+// 设置系统托盘图标和菜单
 function setupTray() {
   const iconPath = path.join(__dirname, '..', 'resources', 'images', 'tray-icon.png');
   let trayIcon;
@@ -136,6 +148,7 @@ function setupTray() {
   });
 }
 
+// 设置窗口拖拽功能 - 通过IPC监听拖拽事件
 function setupWindowDrag() {
   ipcMain.on('window-drag', (event, { x, y }) => {
     if (mainWindow) {
@@ -162,18 +175,21 @@ app.on('window-all-closed', () => {
   }
 });
 
+// 监听关闭窗口事件
 ipcMain.on('close-window', () => {
   if (mainWindow) {
     mainWindow.close();
   }
 });
 
+// 监听最小化窗口事件
 ipcMain.on('minimize-window', () => {
   if (mainWindow) {
     mainWindow.minimize();
   }
 });
 
+// 监听切换窗口置顶事件
 ipcMain.on('toggle-always-on-top', () => {
   if (mainWindow) {
     const isAlwaysOnTop = mainWindow.isAlwaysOnTop();

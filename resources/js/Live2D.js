@@ -1,8 +1,10 @@
 var live2DHelper;
+// Live2D模型控制文件 - 负责加载Live2D模型和鼠标跟随
 /**
  * InitLive2D
  * @param {String} modelName 
  */
+// 初始化Live2D模型 - 根据模型名称加载对应模型
 function initLive2D(modelName) {
 	if ($("#glcanvas").length == 0) {
 		return;
@@ -13,6 +15,7 @@ function initLive2D(modelName) {
  * loadModel
  * @param {String} modelName 
  */
+// 加载Live2D模型 - 创建Live2DHelper实例并加载模型文件
 function loadModel(modelName) {
 	live2DHelper = new Live2DHelper({ canvas: 'glcanvas' });
 	window.live2DHelper = live2DHelper;
@@ -61,9 +64,11 @@ function loadModel(modelName) {
 			console.error('WebGL错误:', e);
 		}
 		
-		live2DHelper.startMotion("", "0");
-		live2DHelper.startTurnHead();
-		followMouse();
+ 		console.log('即将调用 startMotion("", "0") 播放初始动作');
+ 		live2DHelper.startMotion("", "0");
+ 		console.log('startMotion 调用完成');
+ 		live2DHelper.startTurnHead();
+ 		followMouse();
 
 		if (!$("#glcanvas").hasClass("animated")) {
 			$("#glcanvas").addClass("animated fadeIn");
@@ -71,6 +76,7 @@ function loadModel(modelName) {
 	});
 }
 
+// 鼠标跟随功能 - 实现模型视线跟随鼠标移动
 function followMouse() {
 	// head follow mouse
 	console.log('初始化鼠标跟随...');
@@ -149,6 +155,7 @@ function followMouse() {
  * @param  {int} max number
  * @return {int} random number
  */
+// 生成随机数 - 返回[min, max]范围内的随机整数
 function getRandomNum(min, max) {
 	var range = max - min;
 	return (min + Math.round(Math.random() * range));
@@ -160,6 +167,7 @@ function getRandomNum(min, max) {
  * @param  {int} max number
  * @return {Array} shuffle array
  */
+// 生成随机数组 - 返回[min, max]范围内数字的随机排列
 function getRandomArr(min, max) {
 	var arr = [];
 	for (var i = 0; i <= max - min; i++) {
@@ -177,6 +185,7 @@ function getRandomArr(min, max) {
  * @param  {Array} 
  * @return {Array} 
  */
+// 洗牌算法 - 随机打乱数组顺序
 function shuffle(arr) {
 	var length = arr.length,
 		temp,
