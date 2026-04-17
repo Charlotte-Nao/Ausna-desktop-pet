@@ -1,0 +1,47 @@
+{
+  "name": "asuna-desktop-pet",
+  "version": "1.0.0",
+  "description": "Live2D Asuna Desktop Pet",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder"
+  },
+  "keywords": [
+    "live2d",
+    "desktop-pet",
+    "asuna",
+    "electron"
+  ],
+  "author": "Asuna Desktop Pet Project",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.asuna.pet",
+    "productName": "Asuna Desktop Pet",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "resources/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      "resources/**"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

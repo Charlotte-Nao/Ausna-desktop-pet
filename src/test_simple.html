@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Test</title>
+</head>
+<body>
+    <h1>Simple Test</h1>
+    <div id="test">Test div</div>
+    
+    <script>
+        console.log('=== jQuery Test Start ===');
+        console.log('Before loading jQuery');
+        
+        // 动态加载jQuery
+        var script = document.createElement('script');
+        script.src = 'file:///D:/interesting/opnecode_use/4.16/resources/js/jquery.min.js';
+        script.onload = function() {
+            console.log('jQuery loaded dynamically:', typeof $ !== 'undefined');
+            if (typeof $ !== 'undefined') {
+                console.log('jQuery version:', $.fn.jquery);
+                $('#test').css('color', 'blue');
+                console.log('jQuery dynamic load SUCCESS');
+            }
+        };
+        script.onerror = function(e) {
+            console.error('Failed to load jQuery dynamically:', e);
+        };
+        document.head.appendChild(script);
+        
+        console.log('Testing direct include...');
+    </script>
+    
+    <!-- 直接包含 -->
+    <script src="file:///D:/interesting/opnecode_use/4.16/resources/js/jquery.min.js"></script>
+    <script>
+        console.log('After direct include:', typeof $ !== 'undefined');
+        if (typeof $ !== 'undefined') {
+            console.log('jQuery direct load SUCCESS, version:', $.fn.jquery);
+            $('#test').css('backgroundColor', 'yellow');
+        }
+        console.log('=== jQuery Test End ===');
+    </script>
+</body>
+</html>

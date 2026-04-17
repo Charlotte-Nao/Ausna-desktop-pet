@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>jQuery Test</title>
+</head>
+<body>
+    <h1>jQuery Test</h1>
+    <div id="test">Test div</div>
+    
+    <script src="resources/js/jquery.min.js"></script>
+    <script>
+        console.log('jQuery loaded:', typeof $ !== 'undefined');
+        console.log('jQuery version:', $.fn.jquery);
+        
+        if (typeof $ !== 'undefined') {
+            $('#test').css('color', 'red');
+            console.log('jQuery works!');
+        } else {
+            console.error('jQuery NOT loaded!');
+        }
+    </script>
+</body>
+</html>

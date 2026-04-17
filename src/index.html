@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asuna 桌面宠物</title>
+    <link rel="stylesheet" href="../resources/css/Live2D.css">
+    
+    <script>
+        (function() {
+            if (typeof require !== 'undefined') {
+                const path = require('path');
+                const fs = require('fs');
+                window.__resourceRoot = 'file://' + path.resolve(__dirname, '..', 'resources').replace(/\\/g, '/');
+                console.log('资源根路径:', window.__resourceRoot);
+                
+                try {
+                    const jqueryPath = path.resolve(__dirname, '..', 'resources', 'js', 'jquery.min.js');
+                    console.log('加载jQuery路径:', jqueryPath);
+                    const jqueryContent = fs.readFileSync(jqueryPath, 'utf8');
+                    eval(jqueryContent);
+                    console.log('jQuery已通过fs加载, $:', typeof $);
+                } catch (e) {
+                    console.error('通过fs加载jQuery失败:', e);
+                }
+            }
+        })();
+    </script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+        }
+        
+        #container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            cursor: move;
+            -webkit-app-region: drag;
+        }
+        
+        #glcanvas {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            pointer-events: auto;
+            z-index: 1000;
+            will-change: transform;
+            image-rendering: crisp-edges;
+            -webkit-backface-visibility: hidden;
+            -webkit-transform: translateZ(0);
+            backface-visibility: hidden;
+            transform: translateZ(0);
+            -webkit-app-region: no-drag;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: none;
+            z-index: 1001;
+        }
+        
+        .control-btn {
+            width: 24px;
+            height: 24px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            margin-left: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            -webkit-app-region: no-drag;
+        }
+        
+        .control-btn:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+        
+        #context-menu {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 8px 0;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            display: none;
+            z-index: 1002;
+            -webkit-app-region: no-drag;
+            min-width: 180px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .menu-item {
+            padding: 8px 15px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #333;
+            white-space: nowrap;
+        }
+        
+        .menu-item:hover {
+            background: #f0f0f0;
+        }
+        
+        .menu-separator {
+            height: 1px;
+            background: #eee;
+            margin: 5px 0;
+        }
+        
+        .speech-bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid #ff6b9d;
+            border-radius: 20px;
+            padding: 12px 18px;
+            max-width: 250px;
+            min-width: 100px;
+            color: #333;
+            font-size: 14px;
+            font-family: 'Microsoft YaHei', sans-serif;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 999;
+            opacity: 0;
+            left: 50%;
+            top: 20px;
+            transform: translateX(-50%) translateY(10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: none;
+            -webkit-app-region: no-drag;
+            text-align: center;
+        }
+        
+        .speech-bubble.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: calc(50% - 10px);
+            border-width: 10px 10px 0;
+            border-style: solid;
+            border-color: #ff6b9d transparent transparent;
+        }
+        
+        .speech-bubble::before {
+            content: '';
+            position: absolute;
+            bottom: -7px;
+            left: calc(50% - 10px);
+            border-width: 10px 10px 0;
+            border-style: solid;
+            border-color: white transparent transparent;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="glcanvas" width="500" height="1000"></canvas>
+        
+        <div id="speech-bubble" class="speech-bubble"></div>
+        
+        <div id="controls">
+            <button class="control-btn" id="btn-close" title="关闭">×</button>
+            <button class="control-btn" id="btn-minimize" title="最小化">_</button>
+            <button class="control-btn" id="btn-pin" title="切换置顶">📌</button>
+        </div>
+        
+        <div id="context-menu">
+            <div class="menu-item" data-action="fortune">今日运势</div>
+            <div class="menu-item" data-action="change-costume">切换服装</div>
+            <div class="menu-separator"></div>
+            <div class="menu-item" data-action="always-on-top">置顶窗口</div>
+            <div class="menu-item" data-action="show-controls">显示控制按钮</div>
+            <div class="menu-separator"></div>
+            <div class="menu-item" data-action="exit">退出</div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            console.log('动态脚本加载开始...');
+            console.log('$ 已定义?', typeof $);
+            
+            if (typeof $ !== 'undefined') {
+                console.log('jQuery 已加载，跳过加载');
+                loadRemainingScripts();
+                return;
+            }
+            
+            const jquerySrc = window.__resourceRoot ? 
+                window.__resourceRoot + '/js/jquery.min.js' : 
+                '../resources/js/jquery.min.js';
+            
+            console.log('加载jQuery:', jquerySrc);
+            
+            const script = document.createElement('script');
+            script.src = jquerySrc;
+            script.onload = function() {
+                console.log('jQuery加载成功, $:', typeof $);
+                if (typeof $ !== 'undefined') {
+                    console.log('jQuery版本:', $.fn.jquery);
+                }
+                loadRemainingScripts();
+            };
+            script.onerror = function(e) {
+                console.error('jQuery加载失败:', e);
+                setTimeout(() => {
+                    console.log('尝试使用相对路径加载...');
+                    const fallbackScript = document.createElement('script');
+                    fallbackScript.src = '../resources/js/jquery.min.js';
+                    fallbackScript.onload = function() {
+                        console.log('jQuery回退加载成功');
+                        loadRemainingScripts();
+                    };
+                    fallbackScript.onerror = function() {
+                        console.error('jQuery回退加载也失败');
+                        loadRemainingScripts();
+                    };
+                    document.head.appendChild(fallbackScript);
+                }, 100);
+            };
+            
+            function loadRemainingScripts() {
+                const scripts = [
+                    '../resources/js/live2d.min.js',
+                    '../resources/js/live2d-helper.min.js',
+                    '../resources/js/Live2D.js'
+                ];
+                
+                function loadScript(index) {
+                    if (index >= scripts.length) {
+                        console.log('所有脚本加载完成');
+                        initializeDesktopPetAfterLoad();
+                        return;
+                    }
+                    
+                    const src = scripts[index];
+                    const s = document.createElement('script');
+                    s.src = src;
+                    s.onload = function() {
+                        console.log('脚本加载成功:', src);
+                        loadScript(index + 1);
+                    };
+                    s.onerror = function(e) {
+                        console.error('脚本加载失败:', src, e);
+                        loadScript(index + 1);
+                    };
+                    document.head.appendChild(s);
+                }
+                
+                loadScript(0);
+            }
+            
+            function initializeDesktopPetAfterLoad() {
+                console.log('开始初始化桌面宠物...');
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', function() {
+                        if (window.initializeDesktopPet && window.setupEventListeners) {
+                            window.initializeDesktopPet();
+                            window.setupEventListeners();
+                        }
+                    });
+                } else {
+                    if (window.initializeDesktopPet && window.setupEventListeners) {
+                        window.initializeDesktopPet();
+                        window.setupEventListeners();
+                    }
+                }
+            }
+            
+            document.head.appendChild(script);
+        })();
+    </script>
+
+    
+    <script>
+        const { ipcRenderer } = require('electron');
+        
+
+        
+        function initializeDesktopPet() {
+            console.log('初始化桌面宠物...');
+            window.currentCostume = '02';
+            setTimeout(() => {
+                console.log('加载Live2D模型 asuna_02');
+                initLive2D('02');
+                initAdvancedFeatures();
+            }, 500);
+        }
+        window.initializeDesktopPet = initializeDesktopPet;
+
+        function setupEventListeners() {
+            const container = document.getElementById('container');
+            const canvas = document.getElementById('glcanvas');
+            const contextMenu = document.getElementById('context-menu');
+            const controls = document.getElementById('controls');
+            
+            let isDragging = false;
+            let dragStartX = 0;
+            let dragStartY = 0;
+            
+            container.addEventListener('mousedown', (e) => {
+                if (e.button === 0) {
+                    isDragging = true;
+                    dragStartX = e.screenX;
+                    dragStartY = e.screenY;
+                } else if (e.button === 2) {
+                    e.preventDefault();
+                    showContextMenu(e.clientX, e.clientY);
+                }
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const deltaX = e.screenX - dragStartX;
+                    const deltaY = e.screenY - dragStartY;
+                    
+                    ipcRenderer.send('window-drag', { x: deltaX, y: deltaY });
+                    
+                    dragStartX = e.screenX;
+                    dragStartY = e.screenY;
+                }
+            });
+            
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+            
+            document.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+            });
+            
+            document.addEventListener('click', () => {
+                hideContextMenu();
+            });
+            
+            canvas.addEventListener('click', (e) => {
+                console.log('Canvas clicked at:', e.clientX, e.clientY);
+            });
+            
+            document.getElementById('btn-close').addEventListener('click', () => {
+                ipcRenderer.send('close-window');
+            });
+            
+            document.getElementById('btn-minimize').addEventListener('click', () => {
+                ipcRenderer.send('minimize-window');
+            });
+            
+            document.getElementById('btn-pin').addEventListener('click', () => {
+                ipcRenderer.send('toggle-always-on-top');
+                const btn = document.getElementById('btn-pin');
+                btn.textContent = btn.textContent === '📌' ? '📎' : '📌';
+            });
+            
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    const action = e.target.getAttribute('data-action');
+                    handleContextMenuAction(action);
+                    hideContextMenu();
+                });
+            });
+            
+            container.addEventListener('mouseenter', () => {
+                controls.style.display = 'block';
+            });
+            
+            container.addEventListener('mouseleave', () => {
+                controls.style.display = 'none';
+            });
+        }
+        window.setupEventListeners = setupEventListeners;
+
+        function showContextMenu(x, y) {
+            const contextMenu = document.getElementById('context-menu');
+            contextMenu.style.left = x + 'px';
+            contextMenu.style.top = y + 'px';
+            contextMenu.style.display = 'block';
+        }
+        
+        function hideContextMenu() {
+            const contextMenu = document.getElementById('context-menu');
+            contextMenu.style.display = 'none';
+        }
+        
+        function handleContextMenuAction(action) {
+            switch(action) {
+                case 'fortune':
+                    playFortune();
+                    break;
+                case 'change-costume':
+                    changeCostume();
+                    break;
+                case 'always-on-top':
+                    ipcRenderer.send('toggle-always-on-top');
+                    break;
+                case 'show-controls':
+                    toggleControls();
+                    break;
+                case 'exit':
+                    ipcRenderer.send('close-window');
+                    break;
+            }
+        }
+        
+        function playFortune() {
+            console.log('播放运势占卜');
+            playRandomAudio('fortune');
+        }
+        
+        function changeCostume() {
+            console.log('切换服装');
+            const costumes = ['01', '02', '03'];
+            const current = window.currentCostume || '02';
+            let nextIndex = (costumes.indexOf(current) + 1) % costumes.length;
+            const nextCostume = costumes[nextIndex];
+            
+            console.log('尝试切换服装到:', nextCostume);
+            
+            try {
+                if (window.live2DHelper && window.initLive2D) {
+                    window.live2DHelper = null;
+                    initLive2D(nextCostume);
+                    window.currentCostume = nextCostume;
+                    showSpeechBubble(`切换服装: ${nextCostume}`, 2000);
+                }
+            } catch(e) {
+                console.error('切换服装失败:', e);
+                showSpeechBubble('切换失败，使用默认服装', 2000);
+                initLive2D('02');
+                window.currentCostume = '02';
+            }
+        }
+        
+        function toggleControls() {
+            const controls = document.getElementById('controls');
+            controls.style.display = controls.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function showSpeechBubble(text, duration = 3000) {
+            const bubble = document.getElementById('speech-bubble');
+            bubble.textContent = text;
+            bubble.classList.add('show');
+            
+            if (window.speechBubbleTimeout) {
+                clearTimeout(window.speechBubbleTimeout);
+            }
+            
+            window.speechBubbleTimeout = setTimeout(() => {
+                bubble.classList.remove('show');
+            }, duration);
+        }
+        
+        function playRandomAudio(type = 'interaction') {
+            try {
+                // 停止之前播放的音频
+                if (window.currentAudio) {
+                    window.currentAudio.pause();
+                    window.currentAudio.currentTime = 0;
+                    window.currentAudio = null;
+                }
+                
+                const fs = require('fs');
+                const path = require('path');
+                
+                const audioPath = path.resolve(__dirname, '..', 'resources', 'audio', type);
+                console.log('音频路径:', audioPath);
+                
+                if (!fs.existsSync(audioPath)) {
+                    console.error('音频目录不存在:', audioPath);
+                    return;
+                }
+                
+                const files = fs.readdirSync(audioPath).filter(f => f.endsWith('.mp3'));
+                
+                if (files.length > 0) {
+                    const randomFile = files[Math.floor(Math.random() * files.length)];
+                    const filePath = path.join(audioPath, randomFile);
+                    const audioUrl = 'file:///' + filePath.replace(/\\/g, '/');
+                    
+                    console.log('加载音频:', audioUrl);
+                    const audio = new Audio(audioUrl);
+                    audio.volume = 0.7;
+                    
+                    // 保存当前音频引用
+                    window.currentAudio = audio;
+                    
+                    // 音频播放结束后清除引用
+                    audio.onended = function() {
+                        if (window.currentAudio === audio) {
+                            window.currentAudio = null;
+                        }
+                    };
+                    
+                    audio.play().catch(e => console.log('音频播放失败:', e));
+                    
+                    const fileName = randomFile.replace('.mp3', '').replace('[亚丝娜]', '').trim();
+                    showSpeechBubble(fileName, 4000);
+                    
+                    console.log('播放音频:', randomFile);
+                } else {
+                    console.log('未找到音频文件');
+                    showSpeechBubble(type === 'fortune' ? '今日运势：大吉！' : '嗯？怎么了？', 3000);
+                }
+            } catch(e) {
+                console.error('播放音频失败:', e);
+                showSpeechBubble('音频加载失败', 2000);
+            }
+        }
+        
+        function interactWithAsuna(part = 'body') {
+            console.log('与亚丝娜交互:', part);
+            
+            const responses = {
+                head: ['别摸头啦~', '发型会乱哦', '温柔一点嘛'],
+                body: ['好痒~', '不要乱摸啦', '再这样我要生气了'],
+                chest: ['喂！看哪里呢！', '变态！', '离我远点！'],
+                foot: ['脚很敏感的', '不要碰脚啦', '痒死了']
+            };
+            
+            const texts = responses[part] || ['嗯？', '怎么了？', '我在听呢'];
+            const randomText = texts[Math.floor(Math.random() * texts.length)];
+            
+            showSpeechBubble(randomText, 3000);
+            playRandomAudio('interaction');
+            
+            if (window.live2DHelper) {
+                try {
+                    const motions = ['I_FUN', 'I_SURPRISE', 'I_ANGRY'];
+                    const randomMotion = motions[Math.floor(Math.random() * motions.length)];
+                    window.live2DHelper.startMotion(randomMotion, "0");
+                } catch(e) {
+                    console.log('Live2D动作失败:', e);
+                }
+            }
+        }
+        
+        function setupAsunaInteraction() {
+            const canvas = document.getElementById('glcanvas');
+            
+            canvas.addEventListener('click', (e) => {
+                // 检查右键菜单是否显示
+                const contextMenu = document.getElementById('context-menu');
+                if (contextMenu.style.display === 'block') {
+                    // 如果菜单显示，点击画布则隐藏菜单
+                    hideContextMenu();
+                    return;
+                }
+                
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                console.log('Canvas点击位置:', x, y, '画布尺寸:', canvas.width, canvas.height);
+                
+                let part = 'body';
+                if (y < 250) part = 'head';
+                else if (y < 500) part = 'chest';
+                else if (y < 900) part = 'body';
+                else part = 'foot';
+                
+                interactWithAsuna(part);
+            });
+            
+            console.log('亚丝娜交互已设置');
+        }
+        
+        function initAdvancedFeatures() {
+            setTimeout(() => {
+                setupAsunaInteraction();
+                showSpeechBubble('亚丝娜上线啦~', 2000);
+            }, 1000);
+        }
+        
+        window.interactWithAsuna = interactWithAsuna;
+        window.showSpeechBubble = showSpeechBubble;
+        window.playRandomAudio = playRandomAudio;
+    </script>
+</body>
+</html>
