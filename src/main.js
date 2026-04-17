@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
 const path = require('path');
 
 // Electron主进程文件 - 控制应用窗口和系统托盘
@@ -194,5 +194,30 @@ ipcMain.on('toggle-always-on-top', () => {
   if (mainWindow) {
     const isAlwaysOnTop = mainWindow.isAlwaysOnTop();
     mainWindow.setAlwaysOnTop(!isAlwaysOnTop);
+  }
+});
+
+// 监听获取全局鼠标位置请求
+ipcMain.on('get-global-mouse-position', (event) => {
+  if (mainWindow) {
+    const cursorPoint = screen.getCursorScreenPoint();
+    const windowBounds = mainWindow.getBounds();
+    event.reply('global-mouse-position', {
+      screenX: cursorPoint.x,
+      screenY: cursorPoint.y,
+      windowX: windowBounds.x,
+      windowY: windowBounds.y,
+      windowWidth: windowBounds.width,
+      windowHeight: windowBounds.height
+    });
+  } else {
+    event.reply('global-mouse-position', {
+      screenX: 0,
+      screenY: 0,
+      windowX: 0,
+      windowY: 0,
+      windowWidth: 0,
+      windowHeight: 0
+    });
   }
 });

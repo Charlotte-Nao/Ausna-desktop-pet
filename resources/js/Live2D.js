@@ -91,54 +91,169 @@ function followMouse() {
 			isMouseDown = false;
 			console.log('Canvas mouseup');
 		})
-		.mouseout(function (e) {
-			isMouseDown = false;
-			console.log('Canvas mouseout');
-			// 不再重置视线，因为全屏鼠标跟随
-			// if (live2DHelper != null) {
-			// 	live2DHelper.viewPointer(0, 0);
-			// }
-		});
+ 		.mouseout(function (e) {
+ 			isMouseDown = false;
+ 			console.log('Canvas mouseout - 鼠标离开画布，但全屏视线跟随继续');
+ 			// 不再重置视线，因为全屏鼠标跟随
+ 			// if (live2DHelper != null) {
+ 			// 	live2DHelper.viewPointer(0, 0);
+ 			// }
+ 		});
 	
-	// 使用document而不是canvas，全屏幕鼠标跟随
-	$(document).mousemove(function (e) {
-		if (live2DHelper != null) {
-			var canvas = document.getElementById('glcanvas');
-			var rect = canvas.getBoundingClientRect();
-			
-			// 创建模拟事件对象，使followPointer能正确获取画布边界
-			var simulatedEvent = {
-				clientX: e.clientX,
-				clientY: e.clientY,
-				target: canvas
-			};
-			
-			// 始终跟随鼠标，全屏幕范围
-			live2DHelper.followPointer(simulatedEvent);
-			
+	// 全局鼠标跟踪变量
+	var lastMouseX = 0;
+	var lastMouseY = 0;
+	var lastUpdateTime = 0;
+	var mouseInWindow = false;
+	var ipcRenderer = null;
+	
+	// 尝试获取ipcRenderer
+	try {
+		ipcRenderer = require('electron').ipcRenderer;
+		console.log('成功获取ipcRenderer');
+	} catch (err) {
+		console.log('无法获取ipcRenderer，将使用窗口内鼠标跟踪:', err.message);
+	}
+	
+	// 更新视线方向的函数
+	function updateGaze(clientX, clientY, source) {
+		if (live2DHelper == null) {
+			console.log('live2DHelper为null，跳过视线更新');
+			return;
+		}
+		
+		var canvas = document.getElementById('glcanvas');
+		if (!canvas) {
+			console.log('Canvas元素未找到，跳过视线更新');
+			return;
+		}
+		
+		var rect = canvas.getBoundingClientRect();
+		
+		// 检查鼠标是否在画布内
+		var isMouseInCanvas = 
+			clientX >= rect.left && clientX <= rect.right &&
+			clientY >= rect.top && clientY <= rect.bottom;
+		
+		// 创建模拟事件对象，使followPointer能正确获取画布边界
+		var simulatedEvent = {
+			clientX: clientX,
+			clientY: clientY,
+			target: canvas
+		};
+		
+		// 始终跟随鼠标，全屏幕范围
+		live2DHelper.followPointer(simulatedEvent);
+		
 			// 增强视线跟随：基于全屏鼠标位置控制头部转动
 			var canvasCenterX = rect.left + rect.width / 2;
 			var canvasCenterY = rect.top + rect.height / 2;
 			
 			// 计算鼠标相对于画布中心的偏移
-			var dx = e.clientX - canvasCenterX;
-			var dy = e.clientY - canvasCenterY;
+			var dx = clientX - canvasCenterX;
+			var dy = clientY - canvasCenterY;
 			
-			// 动态计算最大偏移量，基于屏幕尺寸
-			var maxOffset = Math.max(window.innerWidth, window.innerHeight) * 0.5;
-			maxOffset = Math.max(300, maxOffset); // 最小300像素
+			// 动态计算最大偏移量，基于屏幕尺寸 - 大幅提高灵敏度
+			var maxOffset = Math.max(window.innerWidth, window.innerHeight) * 0.2; // 从0.3改为0.2，大幅增加灵敏度
+			maxOffset = Math.max(100, maxOffset); // 最小100像素，大幅增加灵敏度
 			
-			// 归一化偏移，限制最大偏移量
-			// 注意：Y轴需要反转，因为屏幕坐标系Y向下为正，模型坐标系Y向上为正
-			var normX = Math.max(-1, Math.min(1, dx / maxOffset));
-			var normY = Math.max(-1, Math.min(1, -dy / maxOffset)); // 反转Y轴
+			// 计算原始偏移比例（不限制）
+			var rawNormX = dx / maxOffset;
+			var rawNormY = -dy / maxOffset; // 反转Y轴
 			
-			// 调用viewPointer控制视线方向
+			// 应用非线性响应曲线：偏移越大，响应越强
+			var enhancedX = Math.sign(rawNormX) * Math.min(1, Math.abs(rawNormX) * 2.0); // 增强2.0倍，大幅提高响应
+			var enhancedY = Math.sign(rawNormY) * Math.min(1, Math.abs(rawNormY) * 2.0);
+			
+			// 最终归一化到[-1.5, 1.5]范围，提供更极端的视线角度
+			var normX = Math.max(-1.5, Math.min(1.5, enhancedX));
+			var normY = Math.max(-1.5, Math.min(1.5, enhancedY));
+			
+			// 调用viewPointer控制视线方向 - 增强视线跟随
 			live2DHelper.viewPointer(normX, normY);
-			
-			console.log('全屏幕鼠标跟随:', e.clientX, e.clientY, '视线方向:', normX.toFixed(2), normY.toFixed(2), 'maxOffset:', maxOffset.toFixed(0));
+			// 限制日志输出
+			var shouldLog = false;
+			if (source === 'window-mousemove') {
+				// 窗口内鼠标移动：每秒最多记录5次
+				if (!window.lastMouseMoveLog) window.lastMouseMoveLog = 0;
+				var now = Date.now();
+				if (now - window.lastMouseMoveLog > 200) { // 每200毫秒最多一次
+					shouldLog = true;
+					window.lastMouseMoveLog = now;
+				}
+			} else if (source === 'global-poll') {
+				// 全局轮询：每10次记录一次
+				if (!window.globalPollLogCounter) window.globalPollLogCounter = 0;
+				window.globalPollLogCounter++;
+				if (window.globalPollLogCounter % 10 === 1) {
+					shouldLog = true;
+				}
+			}
+			if (shouldLog) {
+				console.log('全屏幕鼠标跟随[' + source + ']: 鼠标(' + clientX.toFixed(0) + ', ' + clientY.toFixed(0) + 
+					') 画布内: ' + (isMouseInCanvas ? '是' : '否') + 
+					') 视线方向: ' + normX.toFixed(2) + ', ' + normY.toFixed(2));
+			}
+		
+		// 更新最后已知鼠标位置和视线方向
+		window.lastMouseX = clientX;
+		window.lastMouseY = clientY;
+		window.lastViewX = normX;
+		window.lastViewY = normY;
+		window.mouseUpdateTime = Date.now();
+	}
+	
+	// 窗口内鼠标移动事件（高频更新）
+	$(window).mousemove(function (e) {
+		lastMouseX = e.clientX;
+		lastMouseY = e.clientY;
+		lastUpdateTime = Date.now();
+		if (!mouseInWindow) {
+			console.log('鼠标进入浏览器窗口，切换为窗口内跟踪');
 		}
+		mouseInWindow = true;
+		updateGaze(e.clientX, e.clientY, 'window-mousemove');
 	});
+	
+	// 鼠标离开窗口检测
+	$(window).mouseleave(function (e) {
+		mouseInWindow = false;
+		console.log('鼠标离开浏览器窗口，启用全局跟踪');
+	});
+	
+	// 全局鼠标位置轮询（使用Electron主进程获取屏幕坐标）
+	function pollGlobalMouse() {
+		if (!mouseInWindow && ipcRenderer && live2DHelper != null) {
+			// 鼠标在窗口外，请求全局位置
+			ipcRenderer.send('get-global-mouse-position');
+		}
+	}
+	
+	// 监听全局鼠标位置响应
+	if (ipcRenderer) {
+		ipcRenderer.on('global-mouse-position', (event, data) => {
+			if (!mouseInWindow && live2DHelper != null) {
+				// 将屏幕坐标转换为窗口客户端坐标
+				var clientX = data.screenX - data.windowX;
+				var clientY = data.screenY - data.windowY;
+				
+				// 调试信息：每10次记录一次数据
+				if (!window.globalPollCounter) window.globalPollCounter = 0;
+				window.globalPollCounter++;
+				if (window.globalPollCounter % 10 === 1) {
+					console.log('全局鼠标数据:', JSON.stringify(data), '转换后坐标:', clientX.toFixed(0), clientY.toFixed(0));
+				}
+				
+				// 检查坐标是否在窗口内（包括负值和超出窗口范围）
+				// 即使鼠标在窗口外，我们仍然更新视线
+				updateGaze(clientX, clientY, 'global-poll');
+			}
+		});
+		
+		// 启动全局轮询，每100毫秒一次（10fps）
+		setInterval(pollGlobalMouse, 100);
+		console.log('全局鼠标轮询已启动（每100毫秒）');
+	}
 	
 	console.log('鼠标跟随初始化完成');
 }
