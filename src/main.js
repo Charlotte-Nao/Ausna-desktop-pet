@@ -100,10 +100,10 @@ function createAIWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
   aiWindow = new BrowserWindow({
-    width: 500,
-    height: 125,
-    x: width - 530,
-    y: height - 185,
+    width: 700,
+    height: 250,
+    x: width - 1020,
+    y: height - 320,
     frame: false,
     transparent: true,
     alwaysOnTop: true,

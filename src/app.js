@@ -475,18 +475,13 @@ console.log('全局变量初始化: lastDragEndTime =', window.lastDragEndTime, 
             showSpeechBubble(historyText, 5000);
         }
         
-        // 切换AI模型（简化版：只显示当前模型信息）
+        // 切换AI模型
         function switchAIModel() {
+            console.log('切换AI模型请求');
             // 发送切换模型请求到主进程（转发到AI窗口）
             ipcRenderer.send('switch-ai-model');
-            
-            if (window.AIService && window.AIService.getCurrentModel) {
-                const currentModel = window.AIService.getCurrentModel();
-                const modelName = currentModel === 'deepseek-chat' ? 'Deepseek Chat' : currentModel;
-                showSpeechBubble(`当前AI模型: ${modelName}\n（已优化速度）`, 3000);
-            } else {
-                showSpeechBubble('AI服务未加载', 2000);
-            }
+            // 显示等待消息
+            showSpeechBubble('正在切换AI模型...', 2000);
         }
         
         // 设置AI对话框事件监听器

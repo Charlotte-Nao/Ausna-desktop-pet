@@ -210,15 +210,29 @@
     
     // 切换AI模型（用于右键菜单）
     function switchAIModel() {
-        // 只显示当前模型信息，不切换
-        if (window.AIService && window.AIService.getCurrentModel) {
+        if (window.AIService && window.AIService.getAvailableModels && window.AIService.switchModel) {
+            const models = window.AIService.getAvailableModels();
             const currentModel = window.AIService.getCurrentModel();
-            const modelName = currentModel === 'deepseek-chat' ? 'Deepseek Chat（优化速度）' : currentModel;
             
-            // 不再发送消息，主窗口已显示
-            console.log(`当前AI模型: ${modelName}`);
+            // 找到当前模型索引
+            const currentIndex = models.findIndex(m => m.id === currentModel);
+            const nextIndex = (currentIndex + 1) % models.length;
+            const nextModel = models[nextIndex];
+            
+            // 切换模型
+            const success = window.AIService.switchModel(nextModel.id);
+            
+            if (success) {
+                console.log(`已切换AI模型到: ${nextModel.name}`);
+                // 发送消息到主窗口显示切换结果
+                ipcRenderer.send('show-ai-reply', `已切换AI模型: ${nextModel.name}\n${nextModel.description}`);
+            } else {
+                console.error('切换模型失败');
+                ipcRenderer.send('show-ai-reply', '切换AI模型失败');
+            }
         } else {
-            console.error('AI服务未加载');
+            console.error('AI服务未加载或缺少必要方法');
+            ipcRenderer.send('show-ai-reply', 'AI服务未加载');
         }
     }
     

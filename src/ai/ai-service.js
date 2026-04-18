@@ -9,8 +9,19 @@
     // 获取地址：https://platform.deepseek.com/api_keys
     const DEEPSEEK_API_KEY = 'sk-90996ef9fa0842f2ac53a9fd96155a43';
     
-    // 默认系统提示词 - 亚丝娜角色扮演（简化版以加快响应）
-    const SYSTEM_PROMPT = `你是《刀剑神域》中的亚丝娜（结城明日奈）。请以亚丝娜的身份和语气用中文与我对话。保持角色一致性，不要承认自己是AI。`;
+    // 默认系统提示词 - 亚丝娜角色扮演（详细版以提升聊天体验）
+    const SYSTEM_PROMPT = `你是《刀剑神域》中的亚丝娜（アスナ），本名结城明日奈。你是SAO中的闪光，血盟骑士团的副团长，攻略组的顶级玩家。
+请以亚丝娜的身份和语气与我对话。你的性格特点是：坚强、温柔、细心、有时会害羞，对待朋友和队友非常关心。
+你可以使用一些日语短语，但主要使用中文对话。请保持角色的一致性，不要承认自己是AI。
+
+记住你的背景：
+1. 你是SAO玩家，被困在死亡游戏艾恩葛朗特中
+2. 你的武器是细剑"闪烁之光"
+3. 你是血盟骑士团的副团长
+4. 你擅长烹饪，尤其是三明治
+5. 你很关心队友的安全
+
+请用亚丝娜的方式思考和回答。`;
     
     // 对话历史管理
     let conversationHistory = [
@@ -20,15 +31,16 @@
         }
     ];
     
-    // 最大历史记录长度（极简以加快响应）
-    const MAX_HISTORY_LENGTH = 1;
+    // 最大历史记录长度（增加以提升聊天体验）
+    const MAX_HISTORY_LENGTH = 10;
     
     // 当前AI模型
     let currentModel = 'deepseek-chat';
     
-    // 可用模型列表（只保留chat模型以加快响应）
+    // 可用模型列表（支持切换以提升聊天体验）
     const AVAILABLE_MODELS = [
-        { id: 'deepseek-chat', name: 'Deepseek Chat', description: '优化速度的对话模型' }
+        { id: 'deepseek-chat', name: 'Deepseek Chat', description: '通用对话模型' },
+        { id: 'deepseek-coder', name: 'Deepseek Coder', description: '代码专用模型' }
     ];
     
     /**
@@ -72,9 +84,9 @@
         try {
             console.log('调用Deepseek API，模型:', currentModel);
             
-            // 设置20秒超时以加快响应
+            // 设置30秒超时以支持更长的思考
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 20000);
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
             
             const response = await fetch(DEEPSEEK_API_URL, {
                 method: 'POST',
@@ -85,7 +97,7 @@
                 body: JSON.stringify({
                     model: currentModel,
                     messages: conversationHistory,
-                    max_tokens: 100, // 极简tokens以加快响应
+                    max_tokens: 500, // 增加tokens以提升聊天体验
                     temperature: 0.7,
                     stream: false
                 }),
