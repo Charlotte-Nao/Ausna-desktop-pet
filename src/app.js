@@ -115,10 +115,15 @@ console.log('全局变量初始化: lastDragEndTime =', window.lastDragEndTime, 
         // 初始化桌面宠物 - 加载Live2D模型和高级功能
         function initializeDesktopPet() {
             console.log('初始化桌面宠物...');
-            window.currentCostume = '02';
+            
+            // 获取可用服装列表，使用第一个作为默认
+            const costumes = getAvailableCostumes();
+            const defaultCostume = costumes.length > 0 ? costumes[0] : '02';
+            window.currentCostume = defaultCostume;
+            
             setTimeout(() => {
-                console.log('加载Live2D模型 asuna_02');
-                initLive2D('02');
+                console.log('加载Live2D模型 asuna_' + defaultCostume);
+                initLive2D(defaultCostume);
                 initAdvancedFeatures();
             }, 500);
         }
@@ -299,15 +304,79 @@ console.log('全局变量初始化: lastDragEndTime =', window.lastDragEndTime, 
             playRandomAudio('fortune');
         }
         
-        // 切换服装 - 循环切换01,02,03三个模型
+        // 获取可用服装列表 - 动态扫描models目录
+        function getAvailableCostumes() {
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                
+                const modelsPath = path.resolve(__dirname, '..', 'resources', 'models');
+                console.log('扫描服装目录:', modelsPath);
+                
+                if (!fs.existsSync(modelsPath)) {
+                    console.error('models目录不存在:', modelsPath);
+                    return ['02']; // 默认服装
+                }
+                
+                const items = fs.readdirSync(modelsPath);
+                const costumes = [];
+                
+                for (const item of items) {
+                    const itemPath = path.join(modelsPath, item);
+                    const isDirectory = fs.statSync(itemPath).isDirectory();
+                    
+                    // 匹配 asuna_01, asuna_02 等模式
+                    if (isDirectory && item.startsWith('asuna_')) {
+                        const costumeNumber = item.replace('asuna_', '');
+                        // 确保是数字（01, 02等）
+                        if (/^\d+$/.test(costumeNumber)) {
+                            costumes.push(costumeNumber);
+                        }
+                    }
+                }
+                
+                // 按数字排序
+                costumes.sort((a, b) => parseInt(a) - parseInt(b));
+                
+                console.log('找到服装:', costumes);
+                
+                if (costumes.length === 0) {
+                    console.warn('未找到服装，使用默认服装02');
+                    return ['02'];
+                }
+                
+                return costumes;
+            } catch(e) {
+                console.error('获取服装列表失败:', e);
+                return ['02']; // 默认服装
+            }
+        }
+        
+        // 切换服装 - 动态获取可用模型列表
         function changeCostume() {
             console.log('切换服装');
-            const costumes = ['01', '02', '03'];
-            const current = window.currentCostume || '02';
-            let nextIndex = (costumes.indexOf(current) + 1) % costumes.length;
+            const costumes = getAvailableCostumes();
+            
+            if (costumes.length === 0) {
+                console.error('没有可用的服装');
+                showSpeechBubble('没有可用的服装', 2000);
+                return;
+            }
+            
+            const current = window.currentCostume || costumes[0];
+            let currentIndex = costumes.indexOf(current);
+            
+            // 如果当前服装不在列表中，使用第一个
+            if (currentIndex === -1) {
+                currentIndex = 0;
+                window.currentCostume = costumes[0];
+            }
+            
+            // 循环到下一个服装
+            const nextIndex = (currentIndex + 1) % costumes.length;
             const nextCostume = costumes[nextIndex];
             
-            console.log('尝试切换服装到:', nextCostume);
+            console.log('尝试切换服装到:', nextCostume, '可用服装:', costumes);
             
             try {
                 if (window.live2DHelper && window.initLive2D) {
@@ -319,8 +388,11 @@ console.log('全局变量初始化: lastDragEndTime =', window.lastDragEndTime, 
             } catch(e) {
                 console.error('切换服装失败:', e);
                 showSpeechBubble('切换失败，使用默认服装', 2000);
-                initLive2D('02');
-                window.currentCostume = '02';
+                // 尝试切换到第一个可用服装
+                if (costumes.length > 0) {
+                    initLive2D(costumes[0]);
+                    window.currentCostume = costumes[0];
+                }
             }
         }
         
@@ -385,8 +457,8 @@ console.log('全局变量初始化: lastDragEndTime =', window.lastDragEndTime, 
             '凶, Git 提交备注随手乱写，刚 push 完就发现没法回头修改。'
         ];
 
-        // 播放随机音频 - type: 音频类型('interaction'或'fortune')
-        function playRandomAudio(type = 'interaction') {
+        // 播放随机音频 - type: 音频类型('interaction'或'fortune'), text: 要显示的气泡文本（可选）
+        function playRandomAudio(type = 'interaction', text = null) {
             try {
                 // 停止之前播放的音频
                 if (window.currentAudio) {
@@ -403,7 +475,7 @@ console.log('全局变量初始化: lastDragEndTime =', window.lastDragEndTime, 
                 
                 if (!fs.existsSync(audioPath)) {
                     console.error('音频目录不存在:', audioPath);
-                    return;
+                    return null;
                 }
                 
                 const files = fs.readdirSync(audioPath).filter(f => f.endsWith('.mp3'));
@@ -421,44 +493,83 @@ console.log('全局变量初始化: lastDragEndTime =', window.lastDragEndTime, 
                     // 保存当前音频引用
                     window.currentAudio = audio;
                     
-                    // 音频播放结束后清除引用
-                    audio.onended = function() {
-                        if (window.currentAudio === audio) {
-                            window.currentAudio = null;
-                        }
-                    };
-                    
-                    audio.play().catch(e => console.log('音频播放失败:', e));
-                    
                     const fileName = randomFile.replace('.mp3', '').replace('[亚丝娜]', '').trim();
                     
-                    // 运势文本映射
-                    if (type === 'fortune') {
-
-                        // 对文件排序以确保一致的顺序
+                    // 决定要显示的文本
+                    let displayText = text;
+                    if (!displayText && type === 'fortune') {
+                        // 运势文本映射
                         const sortedFiles = [...files].sort();
                         const fileIndex = sortedFiles.indexOf(randomFile);
-                        let displayText;
                         if (fileIndex !== -1 && fileIndex < fortuneTexts.length) {
                             displayText = fortuneTexts[fileIndex];
                         } else {
-                            // 如果找不到映射，使用文件名
                             displayText = fileName;
                         }
-                        showSpeechBubble(displayText, 4000);
-                    } else if (type !== 'interaction') {
+                    } else if (!displayText && type !== 'interaction') {
                         // 对于非交互类型（如其他未来类型），显示文件名
-                        showSpeechBubble(fileName, 4000);
+                        displayText = fileName;
                     }
                     
+                    // 如果有要显示的文本，显示气泡并与音频同步
+                    if (displayText) {
+                        // 显示气泡，但不设置固定超时（将在音频结束时隐藏）
+                        const bubble = document.getElementById('speech-bubble');
+                        bubble.textContent = displayText;
+                        bubble.classList.add('show');
+                        
+                        // 清除之前的超时
+                        if (window.speechBubbleTimeout) {
+                            clearTimeout(window.speechBubbleTimeout);
+                            window.speechBubbleTimeout = null;
+                        }
+                        
+                        // 在音频播放结束时隐藏气泡
+                        audio.onended = function() {
+                            if (window.currentAudio === audio) {
+                                window.currentAudio = null;
+                            }
+                            bubble.classList.remove('show');
+                            console.log('音频播放结束，隐藏气泡');
+                        };
+                        
+                        // 设置一个安全超时，防止音频onended事件未触发（最长30秒）
+                        window.speechBubbleTimeout = setTimeout(() => {
+                            if (bubble.classList.contains('show')) {
+                                bubble.classList.remove('show');
+                                console.log('安全超时，隐藏气泡');
+                            }
+                        }, 30000);
+                    } else {
+                        // 没有文本显示，只设置音频结束清理
+                        audio.onended = function() {
+                            if (window.currentAudio === audio) {
+                                window.currentAudio = null;
+                            }
+                        };
+                    }
+                    
+                    audio.play().catch(e => console.log('音频播放失败:', e));
+                    
                     console.log('播放音频:', randomFile);
+                    return audio;
                 } else {
                     console.log('未找到音频文件');
-                    showSpeechBubble(type === 'fortune' ? fortuneTexts[Math.floor(Math.random() * fortuneTexts.length)] : '嗯？怎么了？', 3000);
+                    if (text) {
+                        showSpeechBubble(text, 3000);
+                    } else {
+                        showSpeechBubble(type === 'fortune' ? fortuneTexts[Math.floor(Math.random() * fortuneTexts.length)] : '嗯？怎么了？', 3000);
+                    }
+                    return null;
                 }
             } catch(e) {
                 console.error('播放音频失败:', e);
-                showSpeechBubble('音频加载失败', 2000);
+                if (text) {
+                    showSpeechBubble(text, 2000);
+                } else {
+                    showSpeechBubble('音频加载失败', 2000);
+                }
+                return null;
             }
         }
         
@@ -495,9 +606,8 @@ console.log('全局变量初始化: lastDragEndTime =', window.lastDragEndTime, 
             const randomText = texts[Math.floor(Math.random() * texts.length)];
             
             console.log('显示气泡文本:', randomText, '部位:', part);
-            showSpeechBubble(randomText, 3000);
             console.log('调用playRandomAudio: interaction');
-            playRandomAudio('interaction');
+            playRandomAudio('interaction', randomText);
             
              if (window.live2DHelper) {
                  try {
