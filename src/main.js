@@ -22,6 +22,7 @@ process.on('unhandledRejection', (reason, promise) => {
 console.log('Electron主进程启动...');
 
 let mainWindow = null;
+let aiWindow = null;
 let tray = null;
 
 // 创建主窗口函数
@@ -84,6 +85,65 @@ function createWindow() {
 
   setupTray();
   setupWindowDrag();
+}
+
+// 创建AI对话窗口
+function createAIWindow() {
+  console.log('创建AI窗口...');
+  
+  if (aiWindow && !aiWindow.isDestroyed()) {
+    aiWindow.show();
+    aiWindow.focus();
+    return;
+  }
+  
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  
+  aiWindow = new BrowserWindow({
+    width: 500,
+    height: 125,
+    x: width - 530,
+    y: height - 185,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    resizable: false,
+    movable: true, // 允许窗口拖动
+    hasShadow: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+      enableRemoteModule: true,
+      webSecurity: false,
+      allowRunningInsecureContent: true,
+      allowFileAccessFromFileURLs: true,
+      allowUniversalAccessFromFileURLs: true,
+      backgroundThrottling: false,
+      disableBlinkFeatures: 'VSync'
+    }
+  });
+  
+  aiWindow.loadFile('src/ai-window.html')
+    .then(() => {
+      console.log('AI窗口加载成功');
+      aiWindow.show();
+      aiWindow.focus();
+    })
+    .catch((err) => {
+      console.error('加载AI窗口失败:', err);
+    });
+  
+  // 开发工具
+  if (process.argv.includes('--dev')) {
+    aiWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+  
+  aiWindow.on('closed', () => {
+    aiWindow = null;
+    console.log('AI窗口已关闭');
+  });
 }
 
 // 设置系统托盘图标和菜单
@@ -219,5 +279,64 @@ ipcMain.on('get-global-mouse-position', (event) => {
       windowWidth: 0,
       windowHeight: 0
     });
+  }
+});
+
+// 监听打开AI窗口事件
+ipcMain.on('open-ai-window', () => {
+  console.log('收到打开AI窗口请求');
+  createAIWindow();
+});
+
+// 监听AI窗口拖拽事件
+ipcMain.on('ai-window-drag', (event, { x, y }) => {
+  if (aiWindow && !aiWindow.isDestroyed()) {
+    const [currentX, currentY] = aiWindow.getPosition();
+    aiWindow.setPosition(currentX + x, currentY + y);
+  }
+});
+
+// 监听清空AI历史事件（从主窗口发送）
+ipcMain.on('clear-ai-history', () => {
+  console.log('收到清空AI历史请求');
+  if (aiWindow && !aiWindow.isDestroyed()) {
+    aiWindow.webContents.send('clear-ai-history');
+  }
+});
+
+// 监听切换AI模型事件（从主窗口发送）
+ipcMain.on('switch-ai-model', () => {
+  console.log('收到切换AI模型请求');
+  if (aiWindow && !aiWindow.isDestroyed()) {
+    aiWindow.webContents.send('switch-ai-model');
+  }
+});
+
+// 监听显示AI回复事件（从AI窗口发送）
+ipcMain.on('show-ai-reply', (event, reply) => {
+  console.log('收到AI回复，转发到主窗口:', reply.substring(0, 50) + '...');
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('show-ai-reply', reply);
+  }
+});
+
+// 监听获取AI历史记录请求（从主窗口发送）
+ipcMain.on('get-ai-history', (event) => {
+  console.log('收到获取AI历史记录请求');
+  if (aiWindow && !aiWindow.isDestroyed()) {
+    aiWindow.webContents.send('get-ai-history');
+  } else {
+    // AI窗口不存在，返回空历史记录
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('return-ai-history', []);
+    }
+  }
+});
+
+// 监听返回AI历史记录（从AI窗口发送）
+ipcMain.on('return-ai-history', (event, history) => {
+  console.log('收到AI历史记录，转发到主窗口:', history.length, '条记录');
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('return-ai-history', history);
   }
 });

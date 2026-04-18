@@ -116,9 +116,16 @@ console.log('全局变量初始化: lastDragEndTime =', window.lastDragEndTime, 
         function initializeDesktopPet() {
             console.log('初始化桌面宠物...');
             
-            // 获取可用服装列表，使用第一个作为默认
+            // 获取可用服装列表，优先使用02号服装
             const costumes = getAvailableCostumes();
-            const defaultCostume = costumes.length > 0 ? costumes[0] : '02';
+            let defaultCostume = '02';
+            
+            // 检查02是否在可用服装列表中，如果不在则使用第一个可用服装
+            if (!costumes.includes('02') && costumes.length > 0) {
+                defaultCostume = costumes[0];
+                console.warn('02号服装不可用，使用默认服装:', defaultCostume);
+            }
+            
             window.currentCostume = defaultCostume;
             
             setTimeout(() => {
@@ -256,6 +263,18 @@ console.log('全局变量初始化: lastDragEndTime =', window.lastDragEndTime, 
                     controls.style.display = 'none';
                 }
             });
+            
+            // AI按钮事件监听器
+            const aiBtn = document.getElementById('btn-ai');
+            if (aiBtn) {
+                aiBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showAIDialog();
+                });
+            }
+            
+            // 设置AI对话框事件监听器
+            setupAIDialogListeners();
         }
         window.setupEventListeners = setupEventListeners;
 
@@ -295,7 +314,229 @@ console.log('全局变量初始化: lastDragEndTime =', window.lastDragEndTime, 
                 case 'exit':
                     ipcRenderer.send('close-window');
                     break;
+                case 'ai-chat':
+                    showAIDialog();
+                    break;
+                case 'ai-clear-history':
+                    clearAIConversation();
+                    break;
+                case 'ai-view-history':
+                    showAIHistory();
+                    break;
+                case 'ai-switch-model':
+                    switchAIModel();
+                    break;
             }
+        }
+        
+        // AI对话框函数 - 打开独立窗口
+        function showAIDialog() {
+            console.log('请求打开AI独立窗口');
+            ipcRenderer.send('open-ai-window');
+        }
+        
+        function hideAIDialog() {
+            const dialog = document.getElementById('ai-dialog');
+            if (dialog) {
+                dialog.style.display = 'none';
+                console.log('隐藏AI对话框');
+            }
+        }
+        
+        // 添加消息到对话框
+        function addAIMessage(content, isUser = false) {
+            const messagesContainer = document.getElementById('ai-messages');
+            if (!messagesContainer) return;
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `ai-message ${isUser ? 'ai-user' : 'ai-assistant'}`;
+            
+            const avatarDiv = document.createElement('div');
+            avatarDiv.className = 'ai-avatar';
+            avatarDiv.textContent = isUser ? '你' : 'A';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'ai-content';
+            contentDiv.textContent = content;
+            
+            messageDiv.appendChild(avatarDiv);
+            messageDiv.appendChild(contentDiv);
+            messagesContainer.appendChild(messageDiv);
+            
+            // 滚动到底部
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        // 发送AI消息
+        async function sendAIMessage() {
+            const input = document.getElementById('ai-input');
+            const sendBtn = document.getElementById('ai-send-btn');
+            
+            if (!input || !sendBtn) {
+                console.error('AI对话框元素未找到');
+                return;
+            }
+            
+            const message = input.value.trim();
+            if (!message) {
+                return;
+            }
+            
+            // 禁用发送按钮和输入框
+            sendBtn.disabled = true;
+            input.disabled = true;
+            sendBtn.textContent = '发送中...';
+            
+            // 清空输入框
+            input.value = '';
+            
+            try {
+                console.log('发送AI消息:', message.substring(0, 50) + '...');
+                
+                // 检查AI服务是否已加载
+                if (!window.AIService || !window.AIService.sendMessageToAI) {
+                    throw new Error('AI服务未加载，请刷新页面重试');
+                }
+                
+                // 调用AI服务
+                const reply = await window.AIService.sendMessageToAI(message);
+                
+                // 显示AI回复在气泡中
+                showSpeechBubble(reply, 5000);
+                
+                console.log('AI回复成功');
+                
+            } catch (error) {
+                console.error('AI消息发送失败:', error);
+                
+                // 在气泡中显示错误
+                showSpeechBubble(`对话失败: ${error.message}`, 3000);
+                
+            } finally {
+                // 重新启用发送按钮和输入框
+                sendBtn.disabled = false;
+                input.disabled = false;
+                sendBtn.textContent = '发送';
+                
+                // 重新聚焦到输入框
+                input.focus();
+            }
+        }
+        
+        // 清空AI对话历史
+        function clearAIConversation() {
+            // 发送清空历史请求到主进程（转发到AI窗口）
+            ipcRenderer.send('clear-ai-history');
+            
+            const messagesContainer = document.getElementById('ai-messages');
+            if (messagesContainer) {
+                // 保留第一条欢迎消息
+                const welcomeMessage = messagesContainer.querySelector('.ai-message.ai-assistant');
+                messagesContainer.innerHTML = '';
+                if (welcomeMessage) {
+                    messagesContainer.appendChild(welcomeMessage);
+                } else {
+                    // 如果没有欢迎消息，添加一个
+                    addAIMessage('你好！我是亚丝娜，有什么可以帮助你的吗？', false);
+                }
+                
+                // 清空AI服务的历史记录
+                if (window.AIService && window.AIService.clearConversationHistory) {
+                    window.AIService.clearConversationHistory();
+                }
+                
+                console.log('AI对话历史已清空');
+                showSpeechBubble('对话历史已清空', 2000);
+            }
+        }
+        
+        // 查看AI对话历史
+        function showAIHistory() {
+            console.log('请求AI对话历史');
+            // 通过IPC请求AI窗口的历史记录
+            ipcRenderer.send('get-ai-history');
+        }
+        
+        // 显示AI历史记录（由IPC事件触发）
+        function displayAIHistory(history) {
+            if (!history || history.length === 0) {
+                showSpeechBubble('暂无对话历史', 3000);
+                return;
+            }
+            
+            // 构建历史记录文本
+            let historyText = '对话历史:\n\n';
+            history.forEach((msg, index) => {
+                const role = msg.role === 'user' ? '你' : '亚丝娜';
+                const content = msg.content.length > 50 ? msg.content.substring(0, 50) + '...' : msg.content;
+                historyText += `${index + 1}. ${role}: ${content}\n`;
+            });
+            
+            showSpeechBubble(historyText, 5000);
+        }
+        
+        // 切换AI模型（简化版：只显示当前模型信息）
+        function switchAIModel() {
+            // 发送切换模型请求到主进程（转发到AI窗口）
+            ipcRenderer.send('switch-ai-model');
+            
+            if (window.AIService && window.AIService.getCurrentModel) {
+                const currentModel = window.AIService.getCurrentModel();
+                const modelName = currentModel === 'deepseek-chat' ? 'Deepseek Chat' : currentModel;
+                showSpeechBubble(`当前AI模型: ${modelName}\n（已优化速度）`, 3000);
+            } else {
+                showSpeechBubble('AI服务未加载', 2000);
+            }
+        }
+        
+        // 设置AI对话框事件监听器
+        function setupAIDialogListeners() {
+            const dialog = document.getElementById('ai-dialog');
+            const closeBtn = document.getElementById('ai-close-btn');
+            const sendBtn = document.getElementById('ai-send-btn');
+            const input = document.getElementById('ai-input');
+            const clearBtn = document.getElementById('ai-clear-btn');
+            
+            if (!dialog || !closeBtn || !sendBtn || !input) {
+                console.log('AI对话框元素未找到，跳过设置监听器');
+                return;
+            }
+            
+            // 关闭按钮
+            closeBtn.addEventListener('click', hideAIDialog);
+            
+            // 发送按钮
+            sendBtn.addEventListener('click', sendAIMessage);
+            
+            // 输入框回车发送（Ctrl+Enter或Cmd+Enter）
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    sendAIMessage();
+                }
+            });
+            
+            // 点击对话框外部关闭
+            dialog.addEventListener('mousedown', (e) => {
+                if (e.target === dialog) {
+                    hideAIDialog();
+                }
+            });
+            
+            // 阻止对话框内部点击事件冒泡
+            const dialogBody = dialog.querySelector('.ai-dialog-body');
+            if (dialogBody) {
+                dialogBody.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                });
+            }
+            
+            // 清空按钮
+            if (clearBtn) {
+                clearBtn.addEventListener('click', clearAIConversation);
+            }
+            
+            console.log('AI对话框事件监听器已设置');
         }
         
         // 播放运势占卜音频
@@ -709,3 +950,15 @@ console.log('全局变量初始化: lastDragEndTime =', window.lastDragEndTime, 
         window.interactWithAsuna = interactWithAsuna;
         window.showSpeechBubble = showSpeechBubble;
         window.playRandomAudio = playRandomAudio;
+        
+        // 监听AI回复显示事件
+        ipcRenderer.on('show-ai-reply', (event, reply) => {
+            console.log('收到AI回复，显示在气泡中:', reply.substring(0, 50) + '...');
+            showSpeechBubble(reply, 5000);
+        });
+        
+        // 监听AI历史记录返回事件
+        ipcRenderer.on('return-ai-history', (event, history) => {
+            console.log('收到AI历史记录:', history.length, '条记录');
+            displayAIHistory(history);
+        });

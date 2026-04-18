@@ -20,6 +20,7 @@
             <button class="control-btn" id="btn-close" title="关闭">×</button>
             <button class="control-btn" id="btn-minimize" title="最小化">_</button>
             <button class="control-btn" id="btn-pin" title="切换置顶">📌</button>
+            <button class="control-btn ai-btn" id="btn-ai" title="AI对话">🤖</button>
         </div>
         
         <div id="context-menu">
@@ -28,11 +29,31 @@
             <div class="menu-separator"></div>
             <div class="menu-item" data-action="always-on-top">置顶窗口</div>
             <div class="menu-item" data-action="show-controls">显示控制按钮</div>
+            <div class="menu-item" data-action="ai-chat">AI对话</div>
+            <div class="menu-separator"></div>
+            <div class="menu-item" data-action="ai-view-history">查看对话历史</div>
+            <div class="menu-item" data-action="ai-clear-history">清空AI历史</div>
+            <div class="menu-item" data-action="ai-switch-model">当前模型: Deepseek Chat</div>
             <div class="menu-separator"></div>
             <div class="menu-item" data-action="exit">退出</div>
         </div>
+        
+        <!-- AI对话对话框 - 简化版 -->
+        <div id="ai-dialog" class="ai-dialog">
+            <div class="ai-dialog-header">
+                <h3>与亚丝娜对话</h3>
+                <button class="ai-close-btn" id="ai-close-btn" title="关闭">×</button>
+            </div>
+            <div class="ai-dialog-body">
+                <div class="ai-input-area">
+                    <textarea id="ai-input" class="ai-input" placeholder="输入你想说的话...（按Ctrl+Enter发送）"></textarea>
+                    <button id="ai-send-btn" class="ai-send-btn">发送</button>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <script src="ai/ai-service.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
